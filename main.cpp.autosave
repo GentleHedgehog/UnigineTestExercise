@@ -9,6 +9,7 @@
 #include <queue>
 #include <set>
 #include <map>
+#include <algorithm>
 using namespace std;
 
 namespace {
@@ -362,8 +363,8 @@ namespace {
         LexographicalSortedContainerType topPathsLex;
 
         typedef pair<int, string> ByFreqPair;
-        typedef vector< ByFreqPair > ByFreqSortedContainerType;
-        typedef vector< ByFreqPair >::iterator ByFreqSortedContainerTypeIter;
+        typedef list< ByFreqPair > ByFreqSortedContainerType;
+        typedef list< ByFreqPair >::iterator ByFreqSortedContainerTypeIter;
         ByFreqSortedContainerType topDomains;
         ByFreqSortedContainerType topPaths;
 
@@ -384,15 +385,48 @@ namespace {
                 LexographicalSortedContainerType &lexSortedContainer,
                 ByFreqSortedContainerType &byFreqSortedContainer)
         {
-            LexographicalSortedContainerTypeIter itForMap =
+            LexographicalSortedContainerTypeIter itForLex =
                     lexSortedContainer.begin();
-            LexographicalSortedContainerTypeIter itForMapEnd =
+            LexographicalSortedContainerTypeIter itForLexEnd =
                     lexSortedContainer.end();
-            for (; itForMap != itForMapEnd; ++itForMap)
+            for (; itForLex != itForLexEnd; ++itForLex)
             {
                 byFreqSortedContainer.push_back(
-                            make_pair(itForMap->second, itForMap->first));
+                            make_pair(itForLex->second, itForLex->first));
             }
+            
+            
+            using MyThingV = std::vector<MyThing>;
+            using MyThingIt = typename MyThingV::iterator;
+            MyThingV things;
+            // Set up a vector of iterators. We'll sort that.
+            std::vector<MyThingIt> sorted; sorted.reserve(things.size());
+            for (auto it = things.begin(); it != things.end(); ++it) sorted.push_back(it);
+            
+            std::partial_sort(sorted.begin(), sorted.begin() + upto_index, sorted.end(),
+              [](MyThingIt lhs, MyThingIt rhs) {
+                // First see if the underlying elements differ.
+                if (*lhs < *rhs) return true;
+                if (*rhs < *lhs) return false;
+                // Underlying elements are the same, so compare iterators; these represent
+                // position in original vector.
+                return lhs < rhs;
+              });
+            
+            vector<ByFreqSortedContainerTypeIter> vForStableSort;
+            vForStableSort.reserve(byFreqSortedContainer.size());
+            ByFreqSortedContainerTypeIter itForFreq = byFreqSortedContainer.begin();
+            ByFreqSortedContainerTypeIter itForFreqEnd = byFreqSortedContainer.end();
+            
+            for (; itForFreq != itForFreqEnd; ++itForFreq)
+            {
+                vForStableSort.push_back(itForFreq);
+            }
+            
+            partial_sort(vForStableSort.begin(), 
+                         vForStableSort.begin() + args.N,
+                         vForStableSort.end(),
+                         compare_by_freq);
 
             byFreqSortedContainer.sort(compare_by_freq());
 
