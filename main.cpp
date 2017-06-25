@@ -6,6 +6,7 @@
 #include <string>
 #include <sstream>
 #include <fstream>
+#include <queue>
 using namespace std;
 
 namespace {
@@ -98,13 +99,19 @@ namespace {
 
     struct sUrlStucture{
         string prefix;
+        int prefixBeginPosition;
         string domain;
+        int domainBeginPosition;
         string path;
+        int pathBeginPosition;
         sUrlStucture()
         {
-            prefix = "no";
-            domain = "no";
-            path = "no";
+            prefixBeginPosition = -1;
+            domainBeginPosition = -1;
+            pathBeginPosition = -1;
+            prefix = "";
+            domain = "";
+            path = "";
         }
     };
 
@@ -119,7 +126,7 @@ namespace {
             char curSymbol = first;
             string temp;
             temp.resize(totalSymbols);
-            for (char i = 0; i < totalSymbols; ++i)
+            for (size_t i = 0; i < totalSymbols; ++i)
             {
                 temp[i] = curSymbol + i;
             }
@@ -141,10 +148,10 @@ namespace {
             appendSymbols('0', '9', CONTENT_PATH);
             CONTENT_PATH.append(".,/+_");
 
-            DEBUG_NM(CONTENT_PREFIX[0]);
-            DEBUG_NM(CONTENT_PREFIX[1]);
-            DEBUG_NM(CONTENT_DOMAIN);
-            DEBUG_NM(CONTENT_PATH);
+//            DEBUG_NM(CONTENT_PREFIX[0]);
+//            DEBUG_NM(CONTENT_PREFIX[1]);
+//            DEBUG_NM(CONTENT_DOMAIN);
+//            DEBUG_NM(CONTENT_PATH);
         }
     };
 
@@ -154,6 +161,7 @@ namespace {
             SEARCH_PREFIX,
             EXTRACT_DOMAIN,
             EXTRACT_PATH,
+            END,
         };
 
         list<sUrlStucture> urlContainer;
@@ -166,6 +174,59 @@ namespace {
         }
 
 
+        string extractStringByContent(const string &lineForSearch,
+                                      int beginCharIndex,
+                                      const string &symbolsSet)
+        {
+            bool isSearchContinue = true;
+            int charIndex = beginCharIndex;
+            int lastIndex = lineForSearch.size() - 1;
+
+            string subString;
+            subString.resize(lineForSearch.size());
+            int subStringIndex = 0;
+
+            while (isSearchContinue && (charIndex != lastIndex))
+            {
+                char curChar = lineForSearch.at(charIndex);
+
+                bool isCharFromSymbolsSet =
+                        (symbolsSet.find(curChar) != string::npos);
+
+                if (isCharFromSymbolsSet)
+                {
+                    subString[subStringIndex++] = curChar;
+                }
+                else
+                {
+                    isSearchContinue = false;
+                }
+
+                ++charIndex;
+            }
+
+            subString.resize(subStringIndex);
+
+            return subString;
+        }
+
+        vector<size_t> findAllPrefixes(const string &lineForSearch,
+                                        const string &prefix)
+        {
+            size_t foundPos = 0;
+            vector<size_t> v;
+            do{
+
+                foundPos = lineForSearch.find(prefix, foundPos+1);
+                if (foundPos != string::npos)
+                {
+                    v.push_back(foundPos);
+                }
+
+            }while(foundPos != string::npos);
+
+            return v;
+        }
 
         void parseInputFile(const string &inputFileName)
         {
@@ -175,65 +236,102 @@ namespace {
             if (ifile.is_open())
             {
                 string line;
-                eStates state = SEARCH_PREFIX;
 
                 while (getline(ifile, line))
                 {
                     DEBUG_NM(line);
 
-                    int prefixPos = line.find();
+                    eStates state = SEARCH_PREFIX;
+                    deque<sUrlStucture> urlContainerPerLine;
 
-                    while ()
-
-                    switch (state) {
-                    case SEARCH_PREFIX:
+                    bool isUrlSearchContinue = true;
+                    while (isUrlSearchContinue)
                     {
-                        if (argv[i] == string("-n"))
+                        switch (state) {
+                        case SEARCH_PREFIX:
                         {
-                            state = READ_N;
+                            size_t prefixIndex = 0;
+                            assert (urlInfo.CONTENT_PREFIX.size() >= 1);
+
+                            size_t foundPos = string::npos;
+                            do {
+                                string checkedPrefix =
+                                        urlInfo.CONTENT_PREFIX.at(prefixIndex);
+
+                                vector<size_t> v = findAllPrefixes(line, checkedPrefix);
+
+                                for (size_t posIndex = 0; posIndex < v.size(); ++posIndex)
+                                {
+                                    sUrlStucture urlStructure;
+                                    urlStructure.prefixBeginPosition = v.at(posIndex);
+                                    urlStructure.prefix = checkedPrefix;
+
+                                    urlContainerPerLine.push_back(urlStructure);
+
+                                    state = EXTRACT_DOMAIN;
+                                }
+
+                            } while (++prefixIndex < urlInfo.CONTENT_PREFIX.size());
+
+                            bool isNoPrefixFound = (state == SEARCH_PREFIX);
+                            if (isNoPrefixFound)
+                            {
+                                state = END;
+                            }
+
+                            break;
                         }
-                        else
+                        case EXTRACT_DOMAIN:
                         {
-                            state = READ_I;
+                            for (size_t i = 0; i < urlContainerPerLine.size(); ++i)
+                            {
+                                sUrlStucture &url = urlContainerPerLine[i];
+                                url.domainBeginPosition =
+                                        url.prefixBeginPosition +
+                                        url.prefix.size();
+
+                                url.domain = extractStringByContent(
+                                            line, url.domainBeginPosition,
+                                            urlInfo.CONTENT_DOMAIN);
+
+                                state = EXTRACT_PATH;
+                            }
+                            break;
                         }
-                        break;
-                    }
-                    case READ_N:
-                    {
-                        string potentialNString(argv[i]);
+                        case EXTRACT_PATH:
+                        {
+                            for (size_t i = 0; i < urlContainerPerLine.size(); ++i)
+                            {
+                                sUrlStucture &url = urlContainerPerLine[i];
+                                url.pathBeginPosition =
+                                        url.domainBeginPosition +
+                                        url.domain.size();
 
-                        assert (potentialNString.size() <= 3);
+                                url.path = extractStringByContent(
+                                            line, url.pathBeginPosition,
+                                            urlInfo.CONTENT_PATH);
 
-                        stringstream convert(potentialNString);
+                                state = END;
+                            }
+                            break;
+                        }
+                        case END:
+                        {
+                            for (size_t i = 0; i < urlContainerPerLine.size(); ++i)
+                            {
+                                urlContainer.push_back(urlContainerPerLine[i]);
+                            }
+                            isUrlSearchContinue = false;
+                            break;
+                        }
+                        default:
+                            ASRT_FAULT(isParseInputFileUnknownState);
+                        }
 
-                        int potentialN = -1;
-                        assert (convert >> potentialN);
+                    }//while search
 
-                        N = potentialN;
 
-                        state = READ_I;
-
-                        break;
-                    }
-                    case READ_I:
-                    {
-                        inputFileName.assign(argv[i]);
-                        assert (inputFileName.size() < 100);
-                        state = READ_O;
-                        break;
-                    }
-                    case READ_O:
-                    {
-                        outputFileName.assign(argv[i]);
-                        assert (outputFileName.size() < 100);
-                        state = END;
-                        break;
-                    }
-                    case END: return;
-                    default:
-                        ASRT_FAULT(isParseArgsUnknownState);
-                    }
-                }
+                }// while getline
 
 
                 ifile.close();
@@ -242,7 +340,6 @@ namespace {
             {
                 DEBUG2("can't open the file - ", inputFileName);
             }
-        }
         }
 
     }parsedLog;
@@ -257,11 +354,11 @@ int main(int argc, char *argv[])
 
     args.parseArgs(argv, argc);
 
-    DEBUG_NM(args.N);
-    DEBUG_NM(args.inputFileName);
-    DEBUG_NM(args.outputFileName);
+//    DEBUG_NM(args.N);
+//    DEBUG_NM(args.inputFileName);
+//    DEBUG_NM(args.outputFileName);
 
-//    parsedLog.parseInputFile(args.inputFileName);
+    parsedLog.parseInputFile(args.inputFileName);
 
 
     return 0;
