@@ -621,7 +621,7 @@ int main(int argc, char *argv[])
 
     outFile.writeOutputFileWithStatistics(args.outputFileName, statistics);
 
-    STOP_TIMING("calc stats");
+    STOP_TIMING("write out file");
 
     return 0;
 }
