@@ -166,8 +166,124 @@ namespace {
         }
     };
 
-    typedef list<sUrlStucture> UrlContainerType;
-    typedef list<sUrlStucture>::const_iterator UrlContainerTypeConstIter;
+    struct sStatistics{
+
+        int totalUrls;
+        int totalDomains;
+        int totalPaths;
+
+        typedef pair<string, int> LexographicalPair;
+        typedef map<LexographicalPair::first_type,
+                    LexographicalPair::second_type> LexographicalSortedContainerType;
+        typedef map<LexographicalPair::first_type,
+                    LexographicalPair::second_type>::iterator LexographicalSortedContainerTypeIter;
+        LexographicalSortedContainerType topDomainsLex;
+        LexographicalSortedContainerType topPathsLex;
+
+        typedef vector< LexographicalSortedContainerTypeIter > ByFreqSortedContainerType;
+        typedef vector< LexographicalSortedContainerTypeIter >::iterator ByFreqSortedContainerTypeIter;
+        ByFreqSortedContainerType topNDomains;
+        ByFreqSortedContainerType topNPaths;
+
+        sStatistics()
+        {
+            totalUrls = 0;
+            totalDomains = 0;
+            totalPaths = 0;
+        }
+
+        struct compare_by_freq {
+            bool operator () (LexographicalSortedContainerTypeIter &lhs,
+                              LexographicalSortedContainerTypeIter &rhs)
+            {
+                bool isFreqGreater = lhs->second > rhs->second;
+                bool isFreqEqual = lhs->second == rhs->second;
+
+                bool isNoSwap = true;
+
+                if (isFreqGreater)
+                {
+                    isNoSwap = true;
+                }
+                else if (isFreqEqual)
+                {
+                    isNoSwap = lhs->first <= rhs->first;
+                }
+                else
+                {
+                    isNoSwap = false;
+                }
+
+                return isNoSwap;
+            }
+        };
+
+        void fillTopContainerSortedByFreq(
+                LexographicalSortedContainerType &lexSortedContainer,
+                ByFreqSortedContainerType &byFreqSortedContainer)
+        {
+            LexographicalSortedContainerTypeIter itForLex =
+                    lexSortedContainer.begin();
+            LexographicalSortedContainerTypeIter itForLexEnd =
+                    lexSortedContainer.end();
+
+            byFreqSortedContainer.reserve(lexSortedContainer.size());
+
+            for (; itForLex != itForLexEnd; ++itForLex)
+            {
+                byFreqSortedContainer.push_back(itForLex);
+            }
+
+            size_t firstNEls = args.N;
+            if (args.N > byFreqSortedContainer.size())
+            {
+                firstNEls = byFreqSortedContainer.size();
+            }
+
+            partial_sort(byFreqSortedContainer.begin(),
+                         byFreqSortedContainer.begin() + firstNEls,
+                         byFreqSortedContainer.end(),
+                         compare_by_freq());
+
+            byFreqSortedContainer.resize(firstNEls);
+            ByFreqSortedContainerType(byFreqSortedContainer).swap(byFreqSortedContainer);
+        }
+
+        void calcStatistics()
+        {
+
+            fillTopContainerSortedByFreq(topDomainsLex, topNDomains);
+            fillTopContainerSortedByFreq(topPathsLex, topNPaths);
+
+        }//calcStat
+
+        void considerUrl(const sUrlStucture &url)
+        {
+            if (topDomainsLex.count(url.domain) == 0)
+            {
+                topDomainsLex.insert(make_pair(url.domain, 1));
+                totalDomains += 1;
+            }
+            else
+            {
+                topDomainsLex[url.domain] += 1;
+            }
+
+            if (topPathsLex.count(url.path) == 0)
+            {
+                topPathsLex.insert(make_pair(url.path, 1));
+                totalPaths += 1;
+            }
+            else
+            {
+                topPathsLex[url.path] += 1;
+            }
+
+            totalUrls += 1;
+        }//consider url
+
+    }statistics;
+
     struct sParsedLog{
 
         enum eStates{
@@ -176,8 +292,6 @@ namespace {
             EXTRACT_PATH,
             END,
         };
-
-        UrlContainerType urlContainer;
 
         const sUrlInfo urlInfo;
 
@@ -247,7 +361,9 @@ namespace {
             return v;
         }
 
-        void parseInputFile(const string &inputFileName)
+
+        void parseInputFile(const string &inputFileName,
+                            sStatistics &stat)
         {
             ifstream ifile;
             ifile.open(inputFileName.c_str());
@@ -358,7 +474,7 @@ namespace {
                                 sUrlStucture &url = urlContainerPerLine[i];
                                 if (url.isValid)
                                 {
-                                    urlContainer.push_back(url);
+                                    stat.considerUrl(url);
                                 }
                             }
                             isUrlSearchContinue = false;
@@ -382,128 +498,7 @@ namespace {
             }
         }
 
-    }parsedLog;
-
-    struct sStatistics{
-
-        int totalUrls;
-        int totalDomains;
-        int totalPaths;
-
-        typedef pair<string, int> LexographicalPair;
-        typedef map<LexographicalPair::first_type,
-                    LexographicalPair::second_type> LexographicalSortedContainerType;
-        typedef map<LexographicalPair::first_type,
-                    LexographicalPair::second_type>::iterator LexographicalSortedContainerTypeIter;
-        LexographicalSortedContainerType topDomainsLex;
-        LexographicalSortedContainerType topPathsLex;
-
-        typedef vector< LexographicalSortedContainerTypeIter > ByFreqSortedContainerType;
-        typedef vector< LexographicalSortedContainerTypeIter >::iterator ByFreqSortedContainerTypeIter;
-        ByFreqSortedContainerType topNDomains;
-        ByFreqSortedContainerType topNPaths;
-
-        sStatistics()
-        {
-            totalUrls = 0;
-            totalDomains = 0;
-            totalPaths = 0;
-        }
-
-        struct compare_by_freq {
-            bool operator () (LexographicalSortedContainerTypeIter &lhs,
-                              LexographicalSortedContainerTypeIter &rhs)
-            {
-                bool isFreqGreater = lhs->second > rhs->second;
-                bool isFreqEqual = lhs->second == rhs->second;
-
-                bool isNoSwap = true;
-
-                if (isFreqGreater)
-                {
-                    isNoSwap = true;
-                }
-                else if (isFreqEqual)
-                {
-                    isNoSwap = lhs->first <= rhs->first;
-                }
-                else
-                {
-                    isNoSwap = false;
-                }
-
-                return isNoSwap;
-            }
-        };
-
-        void fillTopContainerSortedByFreq(
-                LexographicalSortedContainerType &lexSortedContainer,
-                ByFreqSortedContainerType &byFreqSortedContainer)
-        {
-            LexographicalSortedContainerTypeIter itForLex =
-                    lexSortedContainer.begin();
-            LexographicalSortedContainerTypeIter itForLexEnd =
-                    lexSortedContainer.end();
-
-            byFreqSortedContainer.reserve(lexSortedContainer.size());
-
-            for (; itForLex != itForLexEnd; ++itForLex)
-            {
-                byFreqSortedContainer.push_back(itForLex);
-            }
-
-            size_t firstNEls = args.N;
-            if (args.N > byFreqSortedContainer.size())
-            {
-                firstNEls = byFreqSortedContainer.size();
-            }
-
-            partial_sort(byFreqSortedContainer.begin(),
-                         byFreqSortedContainer.begin() + firstNEls,
-                         byFreqSortedContainer.end(),
-                         compare_by_freq());
-
-            byFreqSortedContainer.resize(firstNEls);
-            ByFreqSortedContainerType(byFreqSortedContainer).swap(byFreqSortedContainer);
-        }
-
-        void calcStatistics(const UrlContainerType &urlContainer)
-        {
-            UrlContainerTypeConstIter itForUrl = urlContainer.begin();
-            UrlContainerTypeConstIter itForUrlEnd = urlContainer.end();
-            for (; itForUrl != itForUrlEnd; ++itForUrl) {
-//                DEBUG_NM(it->domain);
-
-                if (topDomainsLex.count(itForUrl->domain) == 0)
-                {
-                    topDomainsLex.insert(make_pair(itForUrl->domain, 1));
-                    totalDomains += 1;
-                }
-                else
-                {
-                    topDomainsLex[itForUrl->domain] += 1;
-                }
-
-                if (topPathsLex.count(itForUrl->path) == 0)
-                {
-                    topPathsLex.insert(make_pair(itForUrl->path, 1));
-                    totalPaths += 1;
-                }
-                else
-                {
-                    topPathsLex[itForUrl->path] += 1;
-                }
-
-                totalUrls += 1;
-
-             }//for
-
-            fillTopContainerSortedByFreq(topDomainsLex, topNDomains);
-            fillTopContainerSortedByFreq(topPathsLex, topNPaths);
-
-        }//calcStat
-
-    }statistics;
+    }parsedLog;    
 
 
     struct sOutputFile{
@@ -554,9 +549,9 @@ namespace {
                     top_paths += "\n";
                 }
 
-//                DEBUG(totalString);
-//                DEBUG(top_domains);
-//                DEBUG(top_paths);
+                DEBUG(totalString);
+                DEBUG(top_domains);
+                DEBUG(top_paths);
 
                 ofile << totalString;
                 ofile << top_domains;
@@ -588,19 +583,45 @@ namespace {
 }
 
 
+#define qDebug() cout
+#include "precisetime.h"
+
+#undef START_TIMING
+#define START_TIMING() \
+    nPrecTime::resetPrecTime();\
+    nPrecTime::initPrecTime()
+
+#undef STOP_TIMING
+#define STOP_TIMING(name) \
+    do{\
+    double mks = nPrecTime::getElapsedPrecTime_mcs();\
+    qDebug() << "stop timing for "#name" (mks): " << mks << endl;\
+    }while(0)
+
+
 int main(int argc, char *argv[])
 {
+    START_TIMING();
+
     args.parseArgs(argv, argc);
+
+    STOP_TIMING("parse args");
 
 //    DEBUG_NM(args.N);
 //    DEBUG_NM(args.inputFileName);
 //    DEBUG_NM(args.outputFileName);
 
-    parsedLog.parseInputFile(args.inputFileName);
+    parsedLog.parseInputFile(args.inputFileName, statistics);
 
-    statistics.calcStatistics(parsedLog.urlContainer);
+    STOP_TIMING("parse urls");
+
+    statistics.calcStatistics();
+
+    STOP_TIMING("calc stats");
 
     outFile.writeOutputFileWithStatistics(args.outputFileName, statistics);
+
+    STOP_TIMING("calc stats");
 
     return 0;
 }
