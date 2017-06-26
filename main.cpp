@@ -587,21 +587,46 @@ namespace {
     }outFile;
 }
 
+#define qDebug() cout
+#include "precisetime.h"
+
+#undef START_TIMING
+#define START_TIMING() \
+    nPrecTime::resetPrecTime();\
+    nPrecTime::initPrecTime()
+
+#undef STOP_TIMING
+#define STOP_TIMING(name) \
+    do{\
+    double mks = nPrecTime::getElapsedPrecTime_mcs();\
+    qDebug() << "stop timing for "#name" (mks): " << mks << endl;\
+    }while(0)
+
 
 int main(int argc, char *argv[])
 {
+    START_TIMING();
+
     args.parseArgs(argv, argc);
+
+    STOP_TIMING("parse args");
 
 //    DEBUG_NM(args.N);
 //    DEBUG_NM(args.inputFileName);
 //    DEBUG_NM(args.outputFileName);
-
     parsedLog.parseInputFile(args.inputFileName);
+
+    STOP_TIMING("parse urls");
 
     statistics.calcStatistics(parsedLog.urlContainer);
 
+    STOP_TIMING("calc stats");
+
     outFile.writeOutputFileWithStatistics(args.outputFileName, statistics);
+
+    STOP_TIMING("write out file");
 
     return 0;
 }
+
 
