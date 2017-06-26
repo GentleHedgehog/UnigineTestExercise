@@ -6,13 +6,16 @@
 #include <string>
 #include <sstream>
 #include <fstream>
+#include <ostream>
 #include <queue>
 #include <set>
 #include <map>
+#include <algorithm>
 using namespace std;
 
 namespace {
 
+#define DEBUG(a1)    cout << a1 << endl;
 #define DEBUG2(a1, a2)    cout << a1 << "\t" << a2 << endl;
 #define DEBUG_NM(x)    cout << ""#x" = " << x << endl;
 
@@ -29,14 +32,14 @@ namespace {
             END,
         };
 
-        int N;
+        size_t N;
         string inputFileName;
         string outputFileName;
         sArgs()
         {
-            N = -1;
-            inputFileName = "no";
-            outputFileName = "no";
+            N = 10;
+            inputFileName = "";
+            outputFileName = "";
         }
 
         void parseArgs(char *argv[], int argc)
@@ -55,6 +58,7 @@ namespace {
                     }
                     else
                     {
+                        --i;
                         state = READ_I;
                     }
                     break;
@@ -108,6 +112,8 @@ namespace {
         string domain;        
         string path;
 
+        bool isValid;
+
         sUrlStucture()
         {
             prefixBeginPosition = -1;
@@ -116,6 +122,7 @@ namespace {
             prefix = "";
             domain = "";
             path = "";
+            isValid = true;
         }
     };
 
@@ -186,13 +193,13 @@ namespace {
         {
             bool isSearchContinue = true;
             int charIndex = beginCharIndex;
-            int lastIndex = lineForSearch.size() - 1;
+            int endIndex = lineForSearch.size();
 
             string subString;
             subString.resize(lineForSearch.size());
             int subStringIndex = 0;
 
-            while (isSearchContinue && (charIndex != lastIndex))
+            while (isSearchContinue && (charIndex != endIndex))
             {
                 char curChar = lineForSearch.at(charIndex);
 
@@ -221,9 +228,15 @@ namespace {
         {
             size_t foundPos = 0;
             vector<size_t> v;
+            bool isFirstStep = true;
             do{
 
-                foundPos = lineForSearch.find(prefix, foundPos+1);
+                foundPos = lineForSearch.find(prefix,
+                                              isFirstStep ?
+                                                  foundPos : foundPos+1);
+
+                isFirstStep = false;
+
                 if (foundPos != string::npos)
                 {
                     v.push_back(foundPos);
@@ -299,8 +312,14 @@ namespace {
                                             line, url.domainBeginPosition,
                                             urlInfo.CONTENT_DOMAIN);
 
-                                state = EXTRACT_PATH;
+                                if (url.domain.empty())
+                                {
+                                    url.isValid = false;
+                                }
                             }
+
+                            state = EXTRACT_PATH;
+
                             break;
                         }
                         case EXTRACT_PATH:
@@ -308,6 +327,12 @@ namespace {
                             for (size_t i = 0; i < urlContainerPerLine.size(); ++i)
                             {
                                 sUrlStucture &url = urlContainerPerLine[i];
+
+                                if (! url.isValid)
+                                {
+                                    continue;
+                                }
+
                                 url.pathBeginPosition =
                                         url.domainBeginPosition +
                                         url.domain.size();
@@ -316,15 +341,25 @@ namespace {
                                             line, url.pathBeginPosition,
                                             urlInfo.CONTENT_PATH);
 
-                                state = END;
+                                if (url.path.empty())
+                                {
+                                    url.path = "/";
+                                }
+
                             }
+
+                            state = END;
                             break;
                         }
                         case END:
                         {
                             for (size_t i = 0; i < urlContainerPerLine.size(); ++i)
                             {
-                                urlContainer.push_back(urlContainerPerLine[i]);
+                                sUrlStucture &url = urlContainerPerLine[i];
+                                if (url.isValid)
+                                {
+                                    urlContainer.push_back(url);
+                                }
                             }
                             isUrlSearchContinue = false;
                             break;
@@ -356,16 +391,17 @@ namespace {
         int totalPaths;
 
         typedef pair<string, int> LexographicalPair;
-        typedef map<LexographicalPair> LexographicalSortedContainerType;
-        typedef map<LexographicalPair>::iterator LexographicalSortedContainerTypeIter;
+        typedef map<LexographicalPair::first_type,
+                    LexographicalPair::second_type> LexographicalSortedContainerType;
+        typedef map<LexographicalPair::first_type,
+                    LexographicalPair::second_type>::iterator LexographicalSortedContainerTypeIter;
         LexographicalSortedContainerType topDomainsLex;
         LexographicalSortedContainerType topPathsLex;
 
-        typedef pair<int, string> ByFreqPair;
-        typedef vector< ByFreqPair > ByFreqSortedContainerType;
-        typedef vector< ByFreqPair >::iterator ByFreqSortedContainerTypeIter;
-        ByFreqSortedContainerType topDomains;
-        ByFreqSortedContainerType topPaths;
+        typedef vector< LexographicalSortedContainerTypeIter > ByFreqSortedContainerType;
+        typedef vector< LexographicalSortedContainerTypeIter >::iterator ByFreqSortedContainerTypeIter;
+        ByFreqSortedContainerType topNDomains;
+        ByFreqSortedContainerType topNPaths;
 
         sStatistics()
         {
@@ -374,29 +410,61 @@ namespace {
             totalPaths = 0;
         }
 
-        bool compare_by_freq (const ByFreqPair& first,
-                              const ByFreqPair& second)
-        {
-            return ( first.first > second.first );
-        }
+        struct compare_by_freq {
+            bool operator () (LexographicalSortedContainerTypeIter &lhs,
+                              LexographicalSortedContainerTypeIter &rhs)
+            {
+                bool isFreqGreater = lhs->second > rhs->second;
+                bool isFreqEqual = lhs->second == rhs->second;
+
+                bool isNoSwap = true;
+
+                if (isFreqGreater)
+                {
+                    isNoSwap = true;
+                }
+                else if (isFreqEqual)
+                {
+                    isNoSwap = lhs->first <= rhs->first;
+                }
+                else
+                {
+                    isNoSwap = false;
+                }
+
+                return isNoSwap;
+            }
+        };
 
         void fillTopContainerSortedByFreq(
                 LexographicalSortedContainerType &lexSortedContainer,
                 ByFreqSortedContainerType &byFreqSortedContainer)
         {
-            LexographicalSortedContainerTypeIter itForMap =
+            LexographicalSortedContainerTypeIter itForLex =
                     lexSortedContainer.begin();
-            LexographicalSortedContainerTypeIter itForMapEnd =
+            LexographicalSortedContainerTypeIter itForLexEnd =
                     lexSortedContainer.end();
-            for (; itForMap != itForMapEnd; ++itForMap)
+
+            byFreqSortedContainer.reserve(lexSortedContainer.size());
+
+            for (; itForLex != itForLexEnd; ++itForLex)
             {
-                byFreqSortedContainer.push_back(
-                            make_pair(itForMap->second, itForMap->first));
+                byFreqSortedContainer.push_back(itForLex);
             }
 
-            byFreqSortedContainer.sort(compare_by_freq());
+            size_t firstNEls = args.N;
+            if (args.N > byFreqSortedContainer.size())
+            {
+                firstNEls = byFreqSortedContainer.size();
+            }
 
-            args.N
+            partial_sort(byFreqSortedContainer.begin(),
+                         byFreqSortedContainer.begin() + firstNEls,
+                         byFreqSortedContainer.end(),
+                         compare_by_freq());
+
+            byFreqSortedContainer.resize(firstNEls);
+            ByFreqSortedContainerType(byFreqSortedContainer).swap(byFreqSortedContainer);
         }
 
         void calcStatistics(const UrlContainerType &urlContainer)
@@ -430,8 +498,8 @@ namespace {
 
              }//for
 
-            fillTopContainerSortedByFreq(topDomainsLex, topDomains);
-            fillTopContainerSortedByFreq(topPathsLex, topPaths);
+            fillTopContainerSortedByFreq(topDomainsLex, topNDomains);
+            fillTopContainerSortedByFreq(topPathsLex, topNPaths);
 
         }//calcStat
 
@@ -466,11 +534,35 @@ namespace {
                 totalString += toString(stat.totalPaths);
                 totalString += "\n\n";
 
-//                DEBUG_NM(totalString);
-
                 string top_domains = "top domains\n";
 
-// consider N !!!!
+                for (size_t i = 0; i < stat.topNDomains.size(); ++i)
+                {
+                    top_domains += toString(stat.topNDomains.at(i)->second);
+                    top_domains += " ";
+                    top_domains += stat.topNDomains.at(i)->first;
+                    top_domains += "\n";
+                }
+
+                string top_paths = "\ntop paths\n";
+
+                for (size_t i = 0; i < stat.topNPaths.size(); ++i)
+                {
+                    top_paths += toString(stat.topNPaths.at(i)->second);
+                    top_paths += " ";
+                    top_paths += stat.topNPaths.at(i)->first;
+                    top_paths += "\n";
+                }
+
+//                DEBUG(totalString);
+//                DEBUG(top_domains);
+//                DEBUG(top_paths);
+
+                ofile << totalString;
+                ofile << top_domains;
+                ofile << top_paths;
+
+                ofile.close();
 
 //                total urls 5, domains 2, paths 5
 
@@ -485,13 +577,6 @@ namespace {
 //                1 /wiki/Kirschkuchen
 //                1 /wiki/Main_Page
 
-//                while (getline(ofile, line))
-//                {
-
-//                }// while getline
-
-
-                ofile.close();
             }
             else
             {
@@ -503,10 +588,8 @@ namespace {
 }
 
 
-
 int main(int argc, char *argv[])
 {
-
     args.parseArgs(argv, argc);
 
 //    DEBUG_NM(args.N);
