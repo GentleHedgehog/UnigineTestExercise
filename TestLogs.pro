@@ -4,11 +4,11 @@ CONFIG -= app_bundle
 CONFIG -= qt
 
 SOURCES += main.cpp \
-    precisetime.cpp
+#    precisetime.cpp
 
 include(deployment.pri)
 qtcAddDeployment()
 
 HEADERS += \
-    precisetime.h
+#    precisetime.h
 

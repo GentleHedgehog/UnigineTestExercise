@@ -47,8 +47,6 @@ namespace {
             eParseArgsState state = SEARCH_N;
             for (int i = 1; i < argc; ++i)
             {
-//                DEBUG_NM(argv[i]);
-
                 switch (state) {
                 case SEARCH_N:
                 {
@@ -158,11 +156,6 @@ namespace {
             appendSymbols('A', 'Z', CONTENT_PATH);
             appendSymbols('0', '9', CONTENT_PATH);
             CONTENT_PATH.append(".,/+_");
-
-//            DEBUG_NM(CONTENT_PREFIX[0]);
-//            DEBUG_NM(CONTENT_PREFIX[1]);
-//            DEBUG_NM(CONTENT_DOMAIN);
-//            DEBUG_NM(CONTENT_PATH);
         }
     };
 
@@ -374,7 +367,6 @@ namespace {
 
                 while (getline(ifile, line))
                 {
-//                    DEBUG_NM(line);
 
                     eStates state = SEARCH_PREFIX;
                     deque<sUrlStucture> urlContainerPerLine;
@@ -559,19 +551,6 @@ namespace {
 
                 ofile.close();
 
-//                total urls 5, domains 2, paths 5
-
-//                top domains
-//                4 en.wikipedia.org
-//                1 www.google.com
-
-//                top paths
-//                1 /search
-//                1 /w/index.php
-//                1 /wiki/Free_software
-//                1 /wiki/Kirschkuchen
-//                1 /wiki/Main_Page
-
             }
             else
             {
@@ -583,45 +562,16 @@ namespace {
 }
 
 
-#define qDebug() cout
-#include "precisetime.h"
-
-#undef START_TIMING
-#define START_TIMING() \
-    nPrecTime::resetPrecTime();\
-    nPrecTime::initPrecTime()
-
-#undef STOP_TIMING
-#define STOP_TIMING(name) \
-    do{\
-    double mks = nPrecTime::getElapsedPrecTime_mcs();\
-    qDebug() << "stop timing for "#name" (mks): " << mks << endl;\
-    }while(0)
-
-
 int main(int argc, char *argv[])
 {
-    START_TIMING();
 
     args.parseArgs(argv, argc);
 
-    STOP_TIMING("parse args");
-
-//    DEBUG_NM(args.N);
-//    DEBUG_NM(args.inputFileName);
-//    DEBUG_NM(args.outputFileName);
-
     parsedLog.parseInputFile(args.inputFileName, statistics);
-
-    STOP_TIMING("parse urls");
 
     statistics.calcStatistics();
 
-    STOP_TIMING("calc stats");
-
     outFile.writeOutputFileWithStatistics(args.outputFileName, statistics);
-
-    STOP_TIMING("write out file");
 
     return 0;
 }
